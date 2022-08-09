@@ -140,6 +140,7 @@ module System.Console.Repline
 
     -- * Toplevel
     evalRepl,
+    evalRepl',
     ReplOpts (..),
     evalReplOpts,
 
@@ -172,8 +173,6 @@ where
 
 import Control.Monad.Catch
 import Control.Monad.Fail as Fail
-import Control.Monad.Fix (MonadFix)
-import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Reader
 import Control.Monad.State.Strict
 import Data.List (isPrefixOf)
@@ -394,13 +393,28 @@ evalRepl ::
   -> HaskelineT m a -- ^ Initialiser
   -> HaskelineT m ExitDecision -- ^ Finaliser ( runs on Ctrl-D )
   -> m ()
-evalRepl banner cmd opts optsPrefix multiCommand comp initz finalz = runHaskelineT _readline (initz >> monad)
+evalRepl = evalRepl' (Just ".history")
+
+-- | Evaluate the REPL logic with history file name into a MonadCatch context.
+evalRepl' ::
+  (MonadMask m, MonadIO m)
+  => Maybe FilePath -- ^ history file
+  -> (MultiLine -> HaskelineT m String) -- ^ Banner
+  -> Command (HaskelineT m) -- ^ Command function
+  -> Options (HaskelineT m) -- ^ Options list and commands
+  -> Maybe Char -- ^ Optional command prefix ( passing Nothing ignores the Options argument )
+  -> Maybe String -- ^ Optional multi-line command ( passing Nothing disables multi-line support )
+  -> CompleterStyle m -- ^ Tab completion function
+  -> HaskelineT m a -- ^ Initialiser
+  -> HaskelineT m ExitDecision -- ^ Finaliser ( runs on Ctrl-D )
+  -> m ()
+evalRepl' historyFile banner cmd opts optsPrefix multiCommand comp initz finalz = runHaskelineT _readline (initz >> monad)
   where
     monad = replLoop banner cmd opts optsPrefix multiCommand finalz
     _readline =
       H.Settings
         { H.complete = mkCompleter comp,
-          H.historyFile = Just ".history",
+          H.historyFile = historyFile,
           H.autoAddHistory = True
         }
 
